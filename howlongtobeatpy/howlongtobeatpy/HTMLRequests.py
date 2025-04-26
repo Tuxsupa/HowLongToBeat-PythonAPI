@@ -4,6 +4,7 @@
 import re
 import json
 from enum import Enum
+from contextlib import asynccontextmanager
 from bs4 import BeautifulSoup
 import aiohttp
 import requests
@@ -193,7 +194,7 @@ class HTMLRequests:
 
     @staticmethod
     async def send_async_web_request(game_name: str, search_modifiers: SearchModifiers = SearchModifiers.NONE,
-                                     page: int = 1):
+                                     page: int = 1, session: aiohttp.ClientSession | None = None):
         """
         Function that search the game using an async request
         @param game_name: The original game name received as input
@@ -202,16 +203,16 @@ class HTMLRequests:
         @return: The HTML code of the research if the request returned 200(OK), None otherwise
         """
         headers = HTMLRequests.get_search_request_headers()
-        search_info_data = HTMLRequests.send_website_request_getcode(False)
+        search_info_data = await HTMLRequests.async_send_website_request_getcode(False, session)
         if search_info_data is None or search_info_data.api_key is None:
-            search_info_data = HTMLRequests.send_website_request_getcode(True)
+            search_info_data = await HTMLRequests.async_send_website_request_getcode(True, session)
         # Make the request
         if search_info_data.search_url is not None:
             HTMLRequests.SEARCH_URL = HTMLRequests.BASE_URL + search_info_data.search_url
         # The main method currently is the call to the API search URL
         search_url_with_key = HTMLRequests.SEARCH_URL + search_info_data.api_key
         payload = HTMLRequests.get_search_request_data(game_name, search_modifiers, page, None)
-        async with aiohttp.ClientSession() as session:
+        async with HTMLRequests.get_session(session) as session:
             async with session.post(search_url_with_key, headers=headers, data=payload) as resp_with_key:
                 if resp_with_key is not None and resp_with_key.status == 200:
                     return await resp_with_key.text()
@@ -285,7 +286,16 @@ class HTMLRequests:
         return HTMLRequests.__cut_game_title(contents.text)
 
     @staticmethod
-    async def async_get_game_title(game_id: int):
+    @asynccontextmanager
+    async def get_session(session: aiohttp.ClientSession | None = None):
+        if session:
+            yield session
+        else:
+            async with aiohttp.ClientSession() as temp_session:
+                yield temp_session
+
+    @staticmethod
+    async def async_get_game_title(game_id: int, session: aiohttp.ClientSession | None = None):
         """
         Function that gets the title of a game from the game (howlongtobeat) id
         @param game_id: id of the game to get the title
@@ -296,7 +306,7 @@ class HTMLRequests:
         headers = HTMLRequests.get_title_request_headers()
 
         # Request and extract title
-        async with aiohttp.ClientSession() as session:
+        async with HTMLRequests.get_session(session) as session:
             async with session.post(HTMLRequests.GAME_URL, params=params, headers=headers) as resp:
                 if resp is not None and resp.status == 200:
                     text = await resp.text()
@@ -332,14 +342,14 @@ class HTMLRequests:
         return None
 
     @staticmethod
-    async def async_send_website_request_getcode(parse_all_scripts: bool):
+    async def async_send_website_request_getcode(parse_all_scripts: bool, session: aiohttp.ClientSession | None = None):
         """
         Function that send a request to howlongtobeat to scrape the key used in the search URL
         @return: The string key to use
         """
         # Make the post request and return the result if is valid
         headers = HTMLRequests.get_title_request_headers()
-        async with aiohttp.ClientSession() as session:
+        async with HTMLRequests.get_session(session) as session:
             async with session.get(HTMLRequests.BASE_URL, headers=headers) as resp:
                 if resp is not None and resp.status == 200:
                     resp_text = await resp.text()
@@ -353,7 +363,7 @@ class HTMLRequests:
                         matching_scripts = [script['src'] for script in scripts if '_app-' in script['src']]
                     for script_url in matching_scripts:
                         script_url = HTMLRequests.BASE_URL + script_url
-                        async with aiohttp.ClientSession() as session:
+                        async with HTMLRequests.get_session(session) as session:
                             async with session.get(script_url, headers=headers) as script_resp:
                                 if script_resp is not None and resp.status == 200:
                                     script_resp_text = await script_resp.text()

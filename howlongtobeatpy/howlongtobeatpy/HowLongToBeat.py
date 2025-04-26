@@ -37,7 +37,7 @@ class HowLongToBeat:
     # ------------------------------------------
 
     async def async_search(self, game_name: str, search_modifiers: SearchModifiers = SearchModifiers.NONE,
-                           similarity_case_sensitive: bool = True):
+                           similarity_case_sensitive: bool = True, session = None):
         """
         Function that search the game using an async request
         @param game_name: The original game name received as input
@@ -47,7 +47,7 @@ class HowLongToBeat:
         """
         if game_name is None or len(game_name) == 0:
             return None
-        html_result = await HTMLRequests.send_async_web_request(game_name, search_modifiers)
+        html_result = await HTMLRequests.send_async_web_request(game_name, search_modifiers, session=session)
         if html_result is not None:
             return self.__parse_web_result(game_name, html_result, input_similarity_case_sensitive = similarity_case_sensitive)
         return None
@@ -72,7 +72,7 @@ class HowLongToBeat:
     # Search functions using game id
     # ------------------------------------------
 
-    async def async_search_from_id(self, game_id: int):
+    async def async_search_from_id(self, game_id: int, session = None):
         """
         Function that search the game using an async request
         To re-use code, I extract the game name and search game by name, picking only the game with the same id
@@ -82,9 +82,9 @@ class HowLongToBeat:
         """
         if game_id is None or game_id == 0:
             return None
-        game_title = await HTMLRequests.async_get_game_title(game_id)
+        game_title = await HTMLRequests.async_get_game_title(game_id, session)
         if game_title is not None:
-            html_result = await HTMLRequests.send_async_web_request(game_title)
+            html_result = await HTMLRequests.send_async_web_request(game_title, session=session)
             if html_result is not None:
                 result_list = self.__parse_web_result(game_title, html_result, game_id)
                 if result_list is None or len(result_list) != 1:
