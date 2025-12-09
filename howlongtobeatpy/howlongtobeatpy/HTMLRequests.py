@@ -223,14 +223,13 @@ class HTMLRequests:
             HTMLRequests.SEARCH_URL = (
                 HTMLRequests.BASE_URL + search_info_data.search_url
             )
-        # The main method currently is the call to the API search URL
-        search_url_with_key = HTMLRequests.SEARCH_URL + search_info_data.api_key
         payload = HTMLRequests.get_search_request_data(
-            game_name, search_modifiers, page, None
+            game_name, search_modifiers, page
         )
-        async with aiohttp.ClientSession() as session:
+
+        async with HTMLRequests.get_session(session) as session:
             async with session.post(
-                search_url_with_key, headers=headers, data=payload
+                HTMLRequests.SEARCH_URL, headers=headers, data=payload
             ) as resp_with_key:
                 if resp_with_key is not None and resp_with_key.status == 200:
                     return await resp_with_key.text()
