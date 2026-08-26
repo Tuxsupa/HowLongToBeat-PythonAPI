@@ -38,19 +38,15 @@ class SearchInformations:
     def __extract_search_url_script(self, script_content: str):
         """
         Function that finds the 'fetch' call using 'method: "POST"',
-        extracts the base endpoint path, and returns the full '/api/path'
-        string (e.g., "/api/search" or "/api/finder").
+        extracts the endpoint path, and returns the full '/api/...'
+        string (e.g., "/api/search/site" or "/api/finder/v2").
 
         This avoids relying on the exact string by confirming
         the use of the POST method, which identifies the actual search endpoint.
 
-        @return: The full API endpoint string (e.g., "/api/search") or None.
+        @return: The full API endpoint string (e.g., "/api/search/site") or None.
         """
-        # Pattern explanation:
-        # 1. Capture Group 1: Matches the path suffix (e.g., "search", "find", "finder").
-        # 2. Ensures the request options contain 'method: "POST"' to filter out the GET init call.
         pattern = re.compile(
-            # Capture Group 1: The path suffix after /api/ (e.g., "search", "find", "finder")
             r'fetch\s*\(\s*["\']/api/([a-zA-Z0-9_/]+)[^"\']*["\']\s*,\s*{[^}]*method:\s*["\']POST["\'][^}]*}',
             re.DOTALL | re.IGNORECASE,
         )
@@ -58,19 +54,9 @@ class SearchInformations:
         match = pattern.search(script_content)
 
         if match:
-            # Example captured string: "search", "find", "finder", or "find/v2"
-            path_suffix = match.group(1)
-
-            # Determine the root path (e.g., "search" from "search/v2")
-            # This ensures we get the base endpoint name even if sub-paths are used.
-            if "/" in path_suffix:
-                base_path = path_suffix.split("/")[0]
-            else:
-                base_path = path_suffix
-
-            # Accept any endpoint variant (search, find, finder, etc.)
-            full_endpoint = f"/api/{base_path}"
-            return full_endpoint
+            # e.g. "search/site", "find", "finder/v2"
+            path_suffix = match.group(1).rstrip("/")
+            return f"/api/{path_suffix}"
 
         return None
 
@@ -195,13 +181,7 @@ class HTMLRequests:
         ua = UserAgent()
         request_user_agent = ua.random.strip()
         # Retrieve the updated URL
-        search_info_data = HTMLRequests.send_website_request_getcode(
-            False, request_user_agent
-        )
-        if search_info_data is None or search_info_data.search_url is None:
-            search_info_data = HTMLRequests.send_website_request_getcode(
-                True, request_user_agent
-            )
+        search_info_data = HTMLRequests.send_website_request_getcode(request_user_agent)
         # Retrieve the request auth token
         auth_struct = None
         if search_info_data is not None and search_info_data.search_url is not None:
@@ -249,12 +229,8 @@ class HTMLRequests:
         request_user_agent = ua.random.strip()
         # Retrieve the updated URL
         search_info_data = await HTMLRequests.async_send_website_request_getcode(
-            False, request_user_agent, session
+            request_user_agent, session
         )
-        if search_info_data is None or search_info_data.search_url is None:
-            search_info_data = await HTMLRequests.async_send_website_request_getcode(
-                True, request_user_agent, session
-            )
         # Retrieve the request auth token
         auth_struct = None
         if search_info_data is not None and search_info_data.search_url is not None:
@@ -384,7 +360,7 @@ class HTMLRequests:
                 return None
 
     @staticmethod
-    def send_website_request_getcode(parse_all_scripts: bool, user_agent):
+    def send_website_request_getcode(user_agent):
         """
         Function that send a request to howlongtobeat to scrape the correct search url
         @return: The search informations to use in the request
@@ -397,12 +373,11 @@ class HTMLRequests:
             soup = BeautifulSoup(resp.text, HTMLRequests.HTML_PARSER)
             # Find all <script> tags with a src attribute containing the substring
             scripts = soup.find_all("script", src=True)
-            if parse_all_scripts:
-                matching_scripts = [script["src"] for script in scripts]
-            else:
-                matching_scripts = [
-                    script["src"] for script in scripts if "_app-" in script["src"]
-                ]
+            matching_scripts = [
+                script["src"]
+                for script in scripts
+                if "/_next/static/chunks/" in script["src"]
+            ]
             for script_url in matching_scripts:
                 script_url = HTMLRequests.BASE_URL + script_url
                 script_resp = requests.get(script_url, headers=headers, timeout=60)
@@ -414,9 +389,7 @@ class HTMLRequests:
 
     @staticmethod
     async def async_send_website_request_getcode(
-        parse_all_scripts: bool,
-        user_agent,
-        session: aiohttp.ClientSession | None = None,
+        user_agent, session: aiohttp.ClientSession | None = None
     ):
         """
         Function that send a request to howlongtobeat to scrape the correct search url
@@ -446,14 +419,11 @@ class HTMLRequests:
                     soup = BeautifulSoup(resp_text, HTMLRequests.HTML_PARSER)
                     # Find all <script> tags with a src attribute containing the substring
                     scripts = soup.find_all("script", src=True)
-                    if parse_all_scripts:
-                        matching_scripts = [script["src"] for script in scripts]
-                    else:
-                        matching_scripts = [
-                            script["src"]
-                            for script in scripts
-                            if "_app-" in script["src"]
-                        ]
+                    matching_scripts = [
+                        script["src"]
+                        for script in scripts
+                        if "/_next/static/chunks/" in script["src"]
+                    ]
                     for script_url in matching_scripts:
                         script_url = HTMLRequests.BASE_URL + script_url
                         async with HTMLRequests.get_session(session) as session:
